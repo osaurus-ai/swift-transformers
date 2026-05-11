@@ -213,6 +213,63 @@ struct TokenizerTests {
         #expect(!encoded.isEmpty)
     }
 
+    @Test
+    func unusedPlaceholderAddedTokensDoNotInflateDelimiterRegex() throws {
+        var addedTokens: [Config] = [
+            [
+                "id": 10,
+                "content": "<special>",
+                "special": true,
+                "lstrip": false,
+                "rstrip": false,
+            ],
+            [
+                "id": 11,
+                "content": "<real_tag>",
+                "special": false,
+                "lstrip": false,
+                "rstrip": false,
+            ],
+        ]
+
+        for i in 0..<128 {
+            addedTokens.append(Config([
+                "id": 1_000 + i,
+                "content": "<unused\(i)>",
+                "special": false,
+                "lstrip": false,
+                "rstrip": false,
+            ]))
+        }
+
+        let tokenizer = try PreTrainedTokenizer(
+            tokenizerConfig: [
+                "tokenizer_class": "PreTrainedTokenizer",
+                "unk_token": "<unk>",
+                "bos_token": "<bos>",
+                "eos_token": "<eos>",
+            ],
+            tokenizerData: [
+                "model": [
+                    "type": "BPE",
+                    "vocab": [
+                        "<unk>": 0,
+                        "hello": 1,
+                    ],
+                    "merges": [],
+                ],
+                "added_tokens": Config(addedTokens),
+            ]
+        )
+
+        #expect(tokenizer.convertTokenToId("<unused42>") == 1_042)
+        #expect(tokenizer.convertTokenToId("<real_tag>") == 11)
+        #expect(tokenizer.tokenize(text: "<real_tag>") == ["<real_tag>"])
+        #expect(tokenizer.encode(text: "<real_tag>", addSpecialTokens: false) == [11])
+        #expect(tokenizer.addedTokensRegex?.pattern.contains("real_tag") == true)
+        #expect(tokenizer.addedTokensRegex?.pattern.contains("unused42") == false)
+    }
+
     /// https://github.com/huggingface/swift-transformers/issues/96
     @Test
     func legacyLlamaBehaviour() async throws {

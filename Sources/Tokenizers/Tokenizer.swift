@@ -506,6 +506,9 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
         // (https://github.com/xenova/transformers.js/commit/c305c3824f628f1f02806a6310bd3b18b0f7f8f5)
         let unwrappedAddedTokens: [(content: String, prefix: Bool, suffix: Bool)] = (tokenizerData["addedTokens"].array(or: [])).compactMap { addedToken -> (String, Bool, Bool)? in
             guard let content = addedToken.content.string() else { return nil }
+            if Self.isUnusedPlaceholderAddedToken(content) {
+                return nil
+            }
             let prefix = addedToken["lstrip"].boolean(or: false)
             let suffix = addedToken["rstrip"].boolean(or: false)
             return (content: content, prefix: prefix, suffix: suffix)
@@ -533,6 +536,16 @@ public class PreTrainedTokenizer: @unchecked Sendable, Tokenizer {
         self.tokenizerConfig = tokenizerConfig
 
         model = try TokenizerModel.from(tokenizerConfig: tokenizerConfig, tokenizerData: tokenizerData, addedTokens: addedTokens, strict: strict)
+    }
+
+    private static func isUnusedPlaceholderAddedToken(_ content: String) -> Bool {
+        guard content.hasPrefix("<unused"), content.hasSuffix(">") else { return false }
+
+        let numberStart = content.index(content.startIndex, offsetBy: "<unused".count)
+        let numberEnd = content.index(before: content.endIndex)
+        guard numberStart < numberEnd else { return false }
+
+        return content[numberStart..<numberEnd].allSatisfy { $0.isNumber }
     }
 
     private func compiledTemplate(for templateString: String) throws -> Template {
